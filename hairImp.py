@@ -134,7 +134,7 @@ for i in range(2, 2 + nbBendingConstraints):
 
 
 grav = gravity(9.81, array([0.0, -1.0]));
-damp = damping(0.1 * 1e-5);
+damp = damping(0.5 * 1e-5);
 
 for t in range(0,20000):
 
@@ -176,7 +176,7 @@ for t in range(0,20000):
 	plt.axis(axisBound)
 	plt.draw();
 	
-	name = "imp%04d.png"%t
+	name = "imp%05d.png"%t
 	fig.savefig(name, dpi=100)
 #plt.show();
 
