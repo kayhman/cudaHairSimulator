@@ -45,9 +45,13 @@ __global__ void applyGravity(float* X, float* Y, float*Z,
 
 
 	float Imass = -gravity * dt / massInv;
-	float Idamp = - alpha * mass * dt;
+	float Idampx = - alpha * vx[idx] * dt;
+	float Idampy = - alpha * vy[idx] * dt;
+	float Idampz = - alpha * vz[idx] * dt;
 	
-	vy[idx] += (Imass + Idamp) / mass * (Zi > 0);
+	vx[idx] += Idampx / mass * (Zi > 0);
+	vy[idx] += (Imass + Idampy) / mass * (Zi > 0);
+	vz[idx] += Idampz / mass * (Zi > 0);
 }
 
 __global__ void integrateK(float* X, float* Y, float*Z,
