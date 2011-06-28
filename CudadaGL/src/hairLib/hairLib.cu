@@ -12,7 +12,7 @@ __global__ void initHairs(float* X, float* Y, float*Z, float hxy, float hz)
 	int idx = Zoffset + lineOffset + threadIdx.x ;
 	X[idx] = threadIdx.x * hxy;
 	Y[idx] = line * hxy;
-	Z[idx] = (Zi-1) * hz * (Zi > 1); // Two first position are in Z = 0;
+	Z[idx] = Zi * hz ;
 }
 
 __global__ void applyGravity(float* X, float* Y, float*Z,
@@ -39,9 +39,9 @@ __global__ void applyGravity(float* X, float* Y, float*Z,
 	float Idampy = - alpha * vy[idx] * dt;
 	float Idampz = - alpha * vz[idx] * dt;
 	
-	vx[idx] += Idampx / mass * (Zi > 0);
-	vy[idx] += (Imass + Idampy) / mass * (Zi > 0);
-	vz[idx] += Idampz / mass * (Zi > 0);
+	vx[idx] += Idampx / mass;
+	vy[idx] += (Imass + Idampy) / mass;
+	vz[idx] += Idampz / mass;
 }
 
 __global__ void integrateK(float* X, float* Y, float*Z,
@@ -65,6 +65,7 @@ __global__ void integrateK(float* X, float* Y, float*Z,
 __global__ void applyConstraint(float* X, float* Y, float*Z,
 							 float* vx, float* vy, float* vz,
 							 int hairLenght,
+							 float hxy,
 							 float hz,
 							 float dt)
 {
@@ -82,27 +83,56 @@ __global__ void applyConstraint(float* X, float* Y, float*Z,
 
 	int line = blockIdx.x;
 	int lineOffset = line * blockDim.x * blockDim.y;
+	int idxC = 0 + lineOffset + threadIdx.x ;
+
+	massPositionX[threadIdx.x] = X[idxC];
+	massPositionY[threadIdx.x] = Y[idxC];
+	massPositionZ[threadIdx.x] = Z[idxC];
+
+	massVelocityX[threadIdx.x] = vx[idxC];
+	massVelocityY[threadIdx.x] = vy[idxC];
+	massVelocityZ[threadIdx.x] = vz[idxC];
+
+	// handle hair root
+	float relX = threadIdx.x * hxy - massPositionX[threadIdx.x];
+	float relY = line * hxy - massPositionY[threadIdx.x];
+	float relZ = - massPositionZ[threadIdx.x];
+
+	float relvX = - massVelocityX[threadIdx.x];
+	float relvY = - massVelocityY[threadIdx.x];
+	float relvZ = - massVelocityZ[threadIdx.x];
+
 	
-	
+	float dist = sqrt( relX * relX + relY * relY + relZ * relZ);
+	if(dist != 0.)
+	{
+		float dx = relX / dist;
+		float dy = relY / dist;
+		float dz = relZ / dist;
+
+		float velProj = dx * relvX + dy * relvY + dz * relvZ;
+		float gap = dist;
+
+		float constI = (gap / dt + velProj) / massInv ;
+
+		vx[idxC] += constI * dx / mass; 
+		vy[idxC] += constI * dy / mass;
+		vz[idxC] += constI * dz / mass;
+
+		massVelocityX[threadIdx.x] += constI * dx / mass;
+		massVelocityY[threadIdx.x] += constI * dy / mass;
+		massVelocityZ[threadIdx.x] += constI * dz / mass;
+
+	}
+
 	for(int z = 0 ; z < hairLenght-1 ; ++z)
 	{
 		int ZoffC = z * (gridDim.x) * blockDim.x * blockDim.y;
 		int ZoffN = (z+1) * (gridDim.x) * blockDim.x * blockDim.y;
 
-
-		int idxC = ZoffC + lineOffset + threadIdx.x ;
+		idxC = ZoffC + lineOffset + threadIdx.x ;
 		int idxN = ZoffN + lineOffset + threadIdx.x ;
 
-
-		massPositionX[threadIdx.x] = X[idxC];
-		massPositionY[threadIdx.x] = Y[idxC];
-		massPositionZ[threadIdx.x] = Z[idxC];
-
-		massVelocityX[threadIdx.x] = vx[idxC];
-		massVelocityY[threadIdx.x] = vy[idxC];
-		massVelocityZ[threadIdx.x] = vz[idxC];
-
-		
 		massPositionX[256 + threadIdx.x] = X[idxN];
 		massPositionY[256 + threadIdx.x] = Y[idxN];
 		massPositionZ[256 + threadIdx.x] = Z[idxN];
@@ -117,31 +147,42 @@ __global__ void applyConstraint(float* X, float* Y, float*Z,
 		float relZ = massPositionZ[256 + threadIdx.x] - massPositionZ[threadIdx.x];
 
 
-		const float relvX = massVelocityX[256 + threadIdx.x] - massVelocityX[threadIdx.x];
-		const float relvY = massVelocityY[256 + threadIdx.x] - massVelocityY[threadIdx.x];
-		const float relvZ = massVelocityZ[256 + threadIdx.x] - massVelocityZ[threadIdx.x];
+		float relvX = massVelocityX[256 + threadIdx.x] - massVelocityX[threadIdx.x];
+		float relvY = massVelocityY[256 + threadIdx.x] - massVelocityY[threadIdx.x];
+		float relvZ = massVelocityZ[256 + threadIdx.x] - massVelocityZ[threadIdx.x];
 
 
 		float dist = sqrt( relX * relX + relY * relY + relZ * relZ);
 		if(dist != 0.)
 		{
-			const float dx = relX / dist;
-			const float dy = relY / dist;
-			const float dz = relZ / dist;
+			float dx = relX / dist;
+			float dy = relY / dist;
+			float dz = relZ / dist;
 
-			const float velProj = dx * relvX + dy * relvY + dz * relvZ;
-			const float gap = dist - hz * (z > 0);
+			float velProj = dx * relvX + dy * relvY + dz * relvZ;
+			float gap = dist - hz ;
 
-			const float constI = (gap / dt + velProj) / (massInv + massInv * (z > 0));
+			float constI = (gap / dt + velProj) / (massInv + massInv);
 
-			vx[idxC] += constI * dx / mass*(z > 0); 
-			vy[idxC] += constI * dy / mass*(z > 0);
-			vz[idxC] += constI * dz / mass*(z > 0);
+			vx[idxC] += constI * dx / mass; 
+			vy[idxC] += constI * dy / mass;
+			vz[idxC] += constI * dz / mass;
 
 			vx[idxN] += -constI * dx / mass; 
 			vy[idxN] += -constI * dy / mass;
 			vz[idxN] += -constI * dz / mass;
+
+			massVelocityX[threadIdx.x] = massVelocityX[256 + threadIdx.x] -constI * dx / mass;
+			massVelocityY[threadIdx.x] = massVelocityY[256 + threadIdx.x] -constI * dy / mass;
+			massVelocityZ[threadIdx.x] = massVelocityZ[256 + threadIdx.x] -constI * dz / mass;
 		}
+
+		massPositionX[threadIdx.x] = massPositionX[256 + threadIdx.x];
+		massPositionY[threadIdx.x] = massPositionY[256 + threadIdx.x];
+		massPositionZ[threadIdx.x] = massPositionZ[256 + threadIdx.x];
+
+		
+
 	}
 }
 
@@ -268,6 +309,7 @@ void HairSimulation::integrate(float dt)
 	applyConstraint<<<gridSize2, blockSize >>>(d_x, d_y, d_z, 
 		d_vx, d_vy, d_vz,
 		hairLenght,
+		hxy,
 		hz,
 		dt);
 
