@@ -13,16 +13,6 @@ __global__ void initHairs(float* X, float* Y, float*Z, float hxy, float hz)
 	X[idx] = threadIdx.x * hxy;
 	Y[idx] = line * hxy;
 	Z[idx] = (Zi-1) * hz * (Zi > 1); // Two first position are in Z = 0;
-
-	//int slice = blockIdx.y;
-	//int Zi = threadIdx.x;
-	//int hairIdInLine = blockIdx.x * blockDim.y + threadIdx.y;
-
-	//int idx = slice * blockDim.x * blockDim.y * gridDim.x + hairIdInLine * blockDim.x + threadIdx.x;
-
-	//X[idx] = hairIdInLine * hxy;
-	//Y[idx] = slice * hxy;
-	//Z[idx] = Zi * hz;
 }
 
 __global__ void applyGravity(float* X, float* Y, float*Z,
@@ -74,6 +64,7 @@ __global__ void integrateK(float* X, float* Y, float*Z,
 
 __global__ void applyConstraint(float* X, float* Y, float*Z,
 							 float* vx, float* vy, float* vz,
+							 int hairLenght,
 							 float hz,
 							 float dt)
 {
@@ -92,8 +83,8 @@ __global__ void applyConstraint(float* X, float* Y, float*Z,
 	int line = blockIdx.x;
 	int lineOffset = line * blockDim.x * blockDim.y;
 	
-	int depth = 30;
-	for(int z = 0 ; z < depth-1 ; ++z)
+	
+	for(int z = 0 ; z < hairLenght-1 ; ++z)
 	{
 		int ZoffC = z * (gridDim.x) * blockDim.x * blockDim.y;
 		int ZoffN = (z+1) * (gridDim.x) * blockDim.x * blockDim.y;
@@ -111,7 +102,6 @@ __global__ void applyConstraint(float* X, float* Y, float*Z,
 		massVelocityY[threadIdx.x] = vy[idxC];
 		massVelocityZ[threadIdx.x] = vz[idxC];
 
-		__syncthreads();
 		
 		massPositionX[256 + threadIdx.x] = X[idxN];
 		massPositionY[256 + threadIdx.x] = Y[idxN];
@@ -121,11 +111,10 @@ __global__ void applyConstraint(float* X, float* Y, float*Z,
 		massVelocityY[256 + threadIdx.x] = vy[idxN];
 		massVelocityZ[256 + threadIdx.x] = vz[idxN];
 
-		__syncthreads();
 
-		const float relX = massPositionX[256 + threadIdx.x] - massPositionX[threadIdx.x];
-		const float relY = massPositionY[256 + threadIdx.x] - massPositionY[threadIdx.x];
-		const float relZ = massPositionZ[256 + threadIdx.x] - massPositionZ[threadIdx.x];
+		float relX = massPositionX[256 + threadIdx.x] - massPositionX[threadIdx.x];
+		float relY = massPositionY[256 + threadIdx.x] - massPositionY[threadIdx.x];
+		float relZ = massPositionZ[256 + threadIdx.x] - massPositionZ[threadIdx.x];
 
 
 		const float relvX = massVelocityX[256 + threadIdx.x] - massVelocityX[threadIdx.x];
@@ -154,24 +143,14 @@ __global__ void applyConstraint(float* X, float* Y, float*Z,
 			vz[idxN] += -constI * dz / mass;
 		}
 	}
-	//dist = self.mass2.pos - self.mass1.pos;
-	//if linalg.norm(dist) != 0.:
-	//distUnit = dist / linalg.norm(dist);
-
-	//relVel = dot((self.mass2.vel - self.mass1.vel), distUnit);
-	//relDist = linalg.norm(dist) - self.refDist;
-
-	//I = (relDist / dt + relVel) / (self.mass1.iMass + self.mass2.iMass) * distUnit;
-	//self.mass1.applyImpulse(I);
-	//self.mass2.applyImpulse(-I);
 }
 
-HairSimulation::HairSimulation(float x, float y, float z, float radius, int nbPartByHair, float hxy, float hz) :
+HairSimulation::HairSimulation(float x, float y, float z, float radius, int hairLenght, float hxy, float hz) :
 x(x),
 y(y), 
 z(z),
 radius(radius),
-nbHairs(nbHairs),
+hairLenght(hairLenght),
 blockX(256),
 blockY(1),
 d_x(NULL),
@@ -195,7 +174,7 @@ HairSimulation::~HairSimulation()
 
 void HairSimulation::initHair()
 {
-	dim3 gridSize(256, 30); 
+	dim3 gridSize(256, hairLenght); 
 	dim3 blockSize(blockX, blockY);
 
 	int size = gridSize.x * gridSize.y * blockSize.x * blockSize.y;
@@ -250,7 +229,7 @@ void HairSimulation::initHair()
 
 void HairSimulation::integrate(float dt)
 {
-	dim3 gridSize(256, 30);
+	dim3 gridSize(256, hairLenght);
 	dim3 blockSize(blockX, blockY);
 	int size = gridSize.x * gridSize.y * blockSize.x * blockSize.y;
 
@@ -288,6 +267,7 @@ void HairSimulation::integrate(float dt)
 
 	applyConstraint<<<gridSize2, blockSize >>>(d_x, d_y, d_z, 
 		d_vx, d_vy, d_vz,
+		hairLenght,
 		hz,
 		dt);
 

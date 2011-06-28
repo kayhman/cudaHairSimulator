@@ -9,7 +9,7 @@ private:
 	float x, y, z;
 	float hxy, hz;
 	float radius;
-	int nbHairs;
+	int hairLenght;
 	int gridX, gridY, gridZ;
 	const int blockX, blockY;
 
@@ -21,7 +21,7 @@ private:
 
 
 public:
-	HairSimulation(float x, float y, float z, float radius, int nbHairs, float hxy, float hz);
+	HairSimulation(float x, float y, float z, float radius, int hairLenght, float hxy, float hz);
 	~HairSimulation();
 	void initHair();
 	void integrate(float dt);
