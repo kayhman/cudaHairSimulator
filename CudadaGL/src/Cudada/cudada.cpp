@@ -77,8 +77,8 @@ int DrawGLScene(GLvoid)
 	for(int i = 0 ; i < gridX ; ++i)
 		for(int j = 0 ; j < gridY ; ++j)
 		{
-			if(i%16 == 0)		
-				if(j % 16 == 0)
+			if(i%8 == 0)		
+				if(j % 8 == 0)
 				{
 					glBegin(GL_LINE_STRIP);
 					for(int z = 0 ; z < hairLenght ; ++z)
@@ -101,7 +101,7 @@ int DrawGLScene(GLvoid)
 	glEnd();*/											
 
 	
-	//rtri+=0.2f;									
+	rtri+=0.2f;									
 	return TRUE;										
 }
 

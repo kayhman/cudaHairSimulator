@@ -1,5 +1,7 @@
 #include "hairLib.h"
 #include <fstream>
+#define M_PI 3.141516
+
 
 __global__ void initHairs(float* X, float* Y, float*Z, float hxy, float hz)
 {
@@ -11,6 +13,28 @@ __global__ void initHairs(float* X, float* Y, float*Z, float hxy, float hz)
 	
 	int idx = Zoffset + lineOffset + threadIdx.x ;
 	X[idx] = threadIdx.x * hxy;
+	Y[idx] = line * hxy;
+	Z[idx] = Zi * hz ;
+}
+
+__device__ float computeX(float hxy)
+{
+	float hx = hxy * cos( - M_PI / 2.0 + ((float)blockIdx.x * M_PI )/ ((float)blockDim.x) ); 
+	return threadIdx.x * hx - (blockDim.x  * hx)/ 2.0;
+}
+
+__global__ void initHairsCircle(float* X, float* Y, float*Z, float hxy, float hz)
+{
+	int line = blockIdx.x;
+	int Zi = blockIdx.y;
+
+	int lineOffset = line * blockDim.x * blockDim.y;
+	int Zoffset = Zi * (gridDim.x) * blockDim.x * blockDim.y;
+	
+	int idx = Zoffset + lineOffset + threadIdx.x ;
+
+	
+	X[idx] = computeX(hxy);
 	Y[idx] = line * hxy;
 	Z[idx] = Zi * hz ;
 }
@@ -124,7 +148,6 @@ __global__ void applyBothConstraint(float* X, float* Y, float*Z,
 	int line = blockIdx.x;
 	int lineOffset = line * blockDim.x * blockDim.y;
 
-	
 	{
 		float massPositionXc = 0.;
 		float massPositionYc = 0.;
@@ -162,7 +185,7 @@ __global__ void applyBothConstraint(float* X, float* Y, float*Z,
 			massVelocityZc = vz[idxC];
 
 			// handle hair root
-			float relX = threadIdx.x * hxy - massPositionXc;
+			float relX = computeX(hxy) - massPositionXc;
 			float relY = line * hxy - massPositionYc;
 			float relZ = - massPositionZc;
 
@@ -199,7 +222,7 @@ __global__ void applyBothConstraint(float* X, float* Y, float*Z,
 			massVelocityZc = vz[idxC];
 
 			// handle hair root
-			float relX = threadIdx.x * hxy - massPositionXc;
+			float relX = computeX(hxy) - massPositionXc;
 			float relY = line * hxy - massPositionYc;
 			float relZ = hz - massPositionZc;
 
@@ -376,7 +399,7 @@ void HairSimulation::initHair()
 	cudaEventCreate(&stop);
 	cudaEventRecord( start, 0 );
 
-	initHairs<<<gridSize, blockSize >>>(d_x, d_y, d_z, hxy, hz);
+	initHairsCircle<<<gridSize, blockSize >>>(d_x, d_y, d_z, hxy, hz);
 	
 	cudaEventRecord( stop, 0 );
 	cudaEventSynchronize( stop );
