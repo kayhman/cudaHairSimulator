@@ -62,7 +62,55 @@ __global__ void integrateK(float* X, float* Y, float*Z,
 	Z[idx] += vz[idx] * dt;
 }
 
-__global__ void applyConstraint(float* X, float* Y, float*Z,
+__device__ void computeConstraintImpulse(const float relX, const float relY, const float relZ,
+									const float relvX, const float relvY, const float relvZ,
+									const float dt, const float mass, const float massInv,
+									const float refDist,
+									float& changeX, float& changeY, float& changeZ)
+
+{
+
+	float dist = sqrt( relX * relX + relY * relY + relZ * relZ);
+	float dx = relX / dist;
+	float dy = relY / dist;
+	float dz = relZ / dist;
+
+	float velProj = dx * relvX + dy * relvY + dz * relvZ;
+	float gap = dist - refDist ;
+
+	float constI = (gap / dt + velProj) / massInv ;
+
+	changeX = constI * dx / mass * (dist != 0.); 
+	changeY = constI * dy / mass * (dist != 0.);
+	changeZ = constI * dz / mass * (dist != 0.);
+}
+
+__device__ void computeBendingConstraintImpulse(const float relX, const float relY, const float relZ,
+									const float relvX, const float relvY, const float relvZ,
+									const float dt, const float mass, const float massInv,
+									const float refDist,
+									float& changeX, float& changeY, float& changeZ)
+
+{
+	float dist = sqrt( relX * relX + relY * relY + relZ * relZ);
+	float dx = relX / dist;
+	float dy = relY / dist;
+	float dz = relZ / dist;
+
+	float velProj = dx * relvX + dy * relvY + dz * relvZ;
+	float gap = dist - refDist ;
+
+	float constI = (gap / dt + velProj) / massInv ;
+
+	changeX = constI * dx / mass * (gap < 0.) *  (dist != 0.); 
+	changeY = constI * dy / mass * (gap < 0.) *  (dist != 0.);
+	changeZ = constI * dz / mass * (gap < 0.) *  (dist != 0.);
+}
+
+__device__ void applyConstraint(float* massPositionX, float* massPositionY, float* massPositionZ,
+								float* massVelocityX, float* massVelocityY, float* massVelocityZ,
+								float* X, 
+								float* Y, float*Z,
 							 float* vx, float* vy, float* vz,
 							 int hairLenght,
 							 float hxy,
@@ -72,13 +120,6 @@ __global__ void applyConstraint(float* X, float* Y, float*Z,
 	const float mass = 1e-5;
 	const float massInv = 1e5;
 
-	__shared__ float  massPositionX[256*2];
-	__shared__ float  massPositionY[256*2];
-	__shared__ float  massPositionZ[256*2];
-
-	__shared__ float  massVelocityX[256*2];
-	__shared__ float  massVelocityY[256*2];
-	__shared__ float  massVelocityZ[256*2];
 
 
 	int line = blockIdx.x;
@@ -103,30 +144,26 @@ __global__ void applyConstraint(float* X, float* Y, float*Z,
 		float relvY = - massVelocityY[threadIdx.x];
 		float relvZ = - massVelocityZ[threadIdx.x];
 
-		float dist = sqrt( relX * relX + relY * relY + relZ * relZ);
-		if(dist != 0.)
-		{
-			float dx = relX / dist;
-			float dy = relY / dist;
-			float dz = relZ / dist;
 
-			float velProj = dx * relvX + dy * relvY + dz * relvZ;
-			float gap = dist;
+		float changeX, changeY, changeZ;
+		computeConstraintImpulse(relX, relY, relZ,
+			relvX, relvY, relvZ,
+			dt, mass, massInv,
+			0.,
+			changeX, changeY,changeZ);
 
-			float constI = (gap / dt + velProj) / massInv ;
+		vx[idxC] += changeX; 
+		vy[idxC] += changeY;
+		vz[idxC] += changeZ;
 
-			vx[idxC] += constI * dx / mass; 
-			vy[idxC] += constI * dy / mass;
-			vz[idxC] += constI * dz / mass;
-
-			massVelocityX[threadIdx.x] += constI * dx / mass;
-			massVelocityY[threadIdx.x] += constI * dy / mass;
-			massVelocityZ[threadIdx.x] += constI * dz / mass;
-		}
+		massVelocityX[threadIdx.x] += changeX;
+		massVelocityY[threadIdx.x] += changeY;
+		massVelocityZ[threadIdx.x] += changeZ;
+	
 	}
 
 	{
-		int idxC = (gridDim.x) * blockDim.x * blockDim.y + lineOffset + threadIdx.x ;
+		int idxC = gridDim.x * blockDim.x * blockDim.y + lineOffset + threadIdx.x ;
 		massPositionX[threadIdx.x] = X[idxC];
 		massPositionY[threadIdx.x] = Y[idxC];
 		massPositionZ[threadIdx.x] = Z[idxC];
@@ -145,27 +182,21 @@ __global__ void applyConstraint(float* X, float* Y, float*Z,
 		float relvZ = - massVelocityZ[threadIdx.x];
 
 
-		float dist = sqrt( relX * relX + relY * relY + relZ * relZ);
-		if(dist != 0.)
-		{
-			float dx = relX / dist;
-			float dy = relY / dist;
-			float dz = relZ / dist;
+		float changeX, changeY, changeZ;
+		computeConstraintImpulse(relX, relY, relZ,
+			relvX, relvY, relvZ,
+			dt, mass, massInv,
+			0.,
+			changeX, changeY,changeZ);
 
-			float velProj = dx * relvX + dy * relvY + dz * relvZ;
-			float gap = dist;
+		vx[idxC] += changeX; 
+		vy[idxC] += changeY;
+		vz[idxC] += changeZ;
 
-			float constI = (gap / dt + velProj) / massInv ;
+		massVelocityX[threadIdx.x] += changeX;
+		massVelocityY[threadIdx.x] += changeY;
+		massVelocityZ[threadIdx.x] += changeZ;
 
-			vx[idxC] += constI * dx / mass; 
-			vy[idxC] += constI * dy / mass;
-			vz[idxC] += constI * dz / mass;
-
-			massVelocityX[threadIdx.x] += constI * dx / mass;
-			massVelocityY[threadIdx.x] += constI * dy / mass;
-			massVelocityZ[threadIdx.x] += constI * dz / mass;
-
-		}
 	}
 
 	for(int z = 1 ; z < hairLenght-1 ; ++z)
@@ -193,34 +224,137 @@ __global__ void applyConstraint(float* X, float* Y, float*Z,
 		float relvY = massVelocityY[256 + threadIdx.x] - massVelocityY[threadIdx.x];
 		float relvZ = massVelocityZ[256 + threadIdx.x] - massVelocityZ[threadIdx.x];
 
-		float dist = sqrt( relX * relX + relY * relY + relZ * relZ);
-		if(dist != 0.)
-		{
-			float dx = relX / dist;
-			float dy = relY / dist;
-			float dz = relZ / dist;
+		float changeX, changeY, changeZ;
+		computeConstraintImpulse(relX, relY, relZ,
+			relvX, relvY, relvZ,
+			dt, mass, massInv + massInv * (z != 1),
+			hz,
+			changeX, changeY,changeZ);
 
-			float velProj = dx * relvX + dy * relvY + dz * relvZ;
-			float gap = dist - hz ;
+		vx[idxC] += changeX * (z != 1); 
+		vy[idxC] += changeY * (z != 1);
+		vz[idxC] += changeZ * (z != 1);
 
-			float constI = (gap / dt + velProj) / (massInv + massInv);
+		vx[idxN] += -changeX; 
+		vy[idxN] += -changeY;
+		vz[idxN] += -changeZ;
 
-			vx[idxC] += constI * dx / mass; 
-			vy[idxC] += constI * dy / mass;
-			vz[idxC] += constI * dz / mass;
-
-			vx[idxN] += -constI * dx / mass; 
-			vy[idxN] += -constI * dy / mass;
-			vz[idxN] += -constI * dz / mass;
-
-			massVelocityX[threadIdx.x] = massVelocityX[256 + threadIdx.x] -constI * dx / mass;
-			massVelocityY[threadIdx.x] = massVelocityY[256 + threadIdx.x] -constI * dy / mass;
-			massVelocityZ[threadIdx.x] = massVelocityZ[256 + threadIdx.x] -constI * dz / mass;
-		}
+		massVelocityX[threadIdx.x] = massVelocityX[256 + threadIdx.x] -changeX;
+		massVelocityY[threadIdx.x] = massVelocityY[256 + threadIdx.x] -changeY;
+		massVelocityZ[threadIdx.x] = massVelocityZ[256 + threadIdx.x] -changeZ;
 
 		massPositionX[threadIdx.x] = massPositionX[256 + threadIdx.x];
 		massPositionY[threadIdx.x] = massPositionY[256 + threadIdx.x];
 		massPositionZ[threadIdx.x] = massPositionZ[256 + threadIdx.x];
+	}
+}
+
+__device__ void applyBendingConstraint(float* massPositionX, float* massPositionY, float* massPositionZ,
+										float* massVelocityX, float* massVelocityY, float* massVelocityZ,
+										float* X, float* Y, float*Z,
+									   float* vx, float* vy, float* vz,
+									   int hairLenght,
+									   float hxy,
+									   float hz,
+									   float dt)
+{
+	const float mass = 1e-5;
+	const float massInv = 1e5;
+	const float theta = 0.0 * 3.1416 / 180.0;
+	const float minL = 2*hz;//sqrt((hz + hz * cos(theta)) * (hz + hz * cos(theta)) + (hz*sin(theta)) * (hz*sin(theta)) );
+
+
+	int line = blockIdx.x;
+	int lineOffset = line * blockDim.x * blockDim.y;
+	
+	for(int z = 0 ; z < hairLenght-2 ; ++z)
+	{
+		int ZoffC = z * (gridDim.x) * blockDim.x * blockDim.y;
+		int ZoffN = (z+2) * (gridDim.x) * blockDim.x * blockDim.y;
+
+		int idxC = ZoffC + lineOffset + threadIdx.x ;
+		int idxN = ZoffN + lineOffset + threadIdx.x ;
+
+
+		massPositionX[threadIdx.x] = X[idxC];
+		massPositionY[threadIdx.x] = Y[idxC];
+		massPositionZ[threadIdx.x] = Z[idxC];
+
+		massVelocityX[threadIdx.x] = vx[idxC];
+		massVelocityY[threadIdx.x] = vy[idxC];
+		massVelocityZ[threadIdx.x] = vz[idxC];
+
+
+		massPositionX[256 + threadIdx.x] = X[idxN];
+		massPositionY[256 + threadIdx.x] = Y[idxN];
+		massPositionZ[256 + threadIdx.x] = Z[idxN];
+
+		massVelocityX[256 + threadIdx.x] = vx[idxN];
+		massVelocityY[256 + threadIdx.x] = vy[idxN];
+		massVelocityZ[256 + threadIdx.x] = vz[idxN];
+
+		float relX = massPositionX[256 + threadIdx.x] - massPositionX[threadIdx.x];
+		float relY = massPositionY[256 + threadIdx.x] - massPositionY[threadIdx.x];
+		float relZ = massPositionZ[256 + threadIdx.x] - massPositionZ[threadIdx.x];
+
+
+		float relvX = massVelocityX[256 + threadIdx.x] - massVelocityX[threadIdx.x];
+		float relvY = massVelocityY[256 + threadIdx.x] - massVelocityY[threadIdx.x];
+		float relvZ = massVelocityZ[256 + threadIdx.x] - massVelocityZ[threadIdx.x];
+
+		float changeX, changeY, changeZ;
+		computeBendingConstraintImpulse(relX, relY, relZ,
+			relvX, relvY, relvZ,
+			dt, mass, massInv + massInv,
+			minL,
+			changeX, changeY,changeZ);
+
+		vx[idxC] += changeX * (z > 1); 
+		vy[idxC] += changeY * (z > 1);
+		vz[idxC] += changeZ * (z > 1);
+
+		vx[idxN] += -changeX; 
+		vy[idxN] += -changeY;
+		vz[idxN] += -changeZ;
+	}
+}
+
+__global__ void applyBothConstraint(float* X, float* Y, float*Z,
+							 float* vx, float* vy, float* vz,
+							 int hairLenght,
+							 float hxy,
+							 float hz,
+							 float dt)
+{
+
+	__shared__ float  massPositionX[256*2];
+	__shared__ float  massPositionY[256*2];
+	__shared__ float  massPositionZ[256*2];
+
+	__shared__ float  massVelocityX[256*2];
+	__shared__ float  massVelocityY[256*2];
+	__shared__ float  massVelocityZ[256*2];
+
+
+	for(int nbIter = 0 ; nbIter < 5 ; ++nbIter)
+	{
+		applyConstraint(massPositionX, massPositionY, massPositionZ,
+			massVelocityX, massVelocityY, massVelocityZ,
+			X, Y, Z,
+			vx, vy, vz,
+			hairLenght,
+			hxy,
+			hz,
+			dt);
+
+		applyBendingConstraint(massPositionX, massPositionY, massPositionZ,
+			massVelocityX, massVelocityY, massVelocityZ,
+			X, Y, Z,
+			vx, vy, vz,
+			hairLenght,
+			hxy,
+			hz,
+			dt);
 	}
 }
 
@@ -342,30 +476,53 @@ void HairSimulation::integrate(float dt)
 	std::ofstream out("log.cudada", std::ios::app);
 	out << "gravity : " << time << std::endl;
 	
+	for(int nbIter = 0 ; nbIter < 5 ; ++ nbIter)
+	{
+		/////////////////////////////////////////
+		//   Integrate Constrained Motion      //
+		/////////////////////////////////////////
+		dim3 gridSize2(256, 1);
+		cudaEventCreate(&start);
+		cudaEventCreate(&stop);
+		cudaEventRecord( start, 0 );
 
-	/////////////////////////////////////////
-	//   Integrate Constrained Motion      //
-	/////////////////////////////////////////
-	dim3 gridSize2(256, 1);
-	cudaEventCreate(&start);
-	cudaEventCreate(&stop);
-	cudaEventRecord( start, 0 );
+		applyBothConstraint<<<gridSize2, blockSize >>>(d_x, d_y, d_z, 
+			d_vx, d_vy, d_vz,
+			hairLenght,
+			hxy,
+			hz,
+			dt);
 
-	applyConstraint<<<gridSize2, blockSize >>>(d_x, d_y, d_z, 
-		d_vx, d_vy, d_vz,
-		hairLenght,
-		hxy,
-		hz,
-		dt);
+		cudaEventRecord( stop, 0 );
+		cudaEventSynchronize( stop );
+		cudaEventElapsedTime( &time, start, stop );
+		cudaEventDestroy( start );
+		cudaEventDestroy( stop );
+		out << cudaGetErrorString(cudaGetLastError()) << std::endl;
+		out << "constraint : " << time << std::endl;
 
-	cudaEventRecord( stop, 0 );
-	cudaEventSynchronize( stop );
-	cudaEventElapsedTime( &time, start, stop );
-	cudaEventDestroy( start );
-	cudaEventDestroy( stop );
-	out << cudaGetErrorString(cudaGetLastError()) << std::endl;
-	out << "constraint : " << time << std::endl;
+		/////////////////////////////////////////////////
+		//   Integrate Bending Constrained Motion      //
+		/////////////////////////////////////////////////
+		cudaEventCreate(&start);
+		cudaEventCreate(&stop);
+		cudaEventRecord( start, 0 );
 
+		//applyBendingConstraint<<<gridSize2, blockSize >>>(d_x, d_y, d_z, 
+		//	d_vx, d_vy, d_vz,
+		//	hairLenght,
+		//	hxy,
+		//	hz,
+		//	dt);
+
+		cudaEventRecord( stop, 0 );
+		cudaEventSynchronize( stop );
+		cudaEventElapsedTime( &time, start, stop );
+		cudaEventDestroy( start );
+		cudaEventDestroy( stop );
+		out << cudaGetErrorString(cudaGetLastError()) << std::endl;
+		out << "bending constraint : " << time << std::endl;
+	}
 	/////////////////////////////////////////
 	//            Time integration         //
 	/////////////////////////////////////////
