@@ -41,7 +41,8 @@ __global__ void initHairsCircle(float* X, float* Y, float*Z, float hxy, float hz
 
 __global__ void applyGravity(float* X, float* Y, float*Z,
 							 float* vx, float* vy, float* vz,
-							 float dt)
+							 float dt,
+							 float windActivity, float windX, float windY, float windZ)
 {
 	const float gravity = 9.81;
 	const float mass = 1e-2;
@@ -59,13 +60,16 @@ __global__ void applyGravity(float* X, float* Y, float*Z,
 
 
 	float Imass = -gravity * dt / massInv;
+
+	float iWind = -100.0 * dt / massInv;
+
 	float Idampx = - alpha * vx[idx] * dt;
 	float Idampy = - alpha * vy[idx] * dt;
 	float Idampz = - alpha * vz[idx] * dt;
 	
-	vx[idx] += Idampx / mass;
-	vy[idx] += (Imass + Idampy) / mass;
-	vz[idx] += Idampz / mass;
+	vx[idx] += (Idampx + iWind * windActivity * windX)  / mass;
+	vy[idx] += (Imass + Idampy + iWind * windActivity * windY) / mass;
+	vz[idx] += (Idampz + iWind * windActivity * windZ) / mass;
 }
 
 __global__ void integrateK(float* X, float* Y, float*Z,
@@ -432,8 +436,31 @@ void HairSimulation::initHair()
 
 }
 
+float windImpulse(int t)
+{
+	float x = (float)(t % 1024 - 512) / (float) 1024 * 15;
+
+	//if(x > -15. && x < 15.0)
+	{
+		if(x == 0.)
+			return 1.0;
+		else
+		{
+			float ret = sin(x) / x;
+			
+			return ret;
+		}
+	}
+	//else
+	//	return 0.;
+}
+
+
 void HairSimulation::integrate(float dt)
 {
+	srand ( time(NULL) );
+	static int windCounter = 0;
+	windCounter++;
 	dim3 gridSize(gridY, hairLenght);
 	dim3 blockSize(gridX, 1);
 	int size = gridSize.x * gridSize.y * blockSize.x * blockSize.y;
@@ -447,9 +474,23 @@ void HairSimulation::integrate(float dt)
 	cudaEventCreate(&stop);
 	cudaEventRecord( start, 0 );
 
+
+	float windX = (float)rand() / (float)RAND_MAX ;
+	float windY = (float)rand() / (float)RAND_MAX ;
+	float windZ = (float)rand() / (float)RAND_MAX ;
+
+	float norm = sqrt(windX*windX + windY*windY + windZ*windZ);
+
+	windX /= norm;
+	windY /= norm;
+	windZ /= norm;
+
+
 	applyGravity<<<gridSize, blockSize >>>(d_x, d_y, d_z, 
 		d_vx, d_vy, d_vz,
-		dt);
+		dt,
+		windImpulse(windCounter),
+		windX, windY, windZ);
 	
 	
 	cudaEventRecord( stop, 0 );

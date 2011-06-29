@@ -90,22 +90,11 @@ int DrawGLScene(GLvoid)
 					glEnd();
 				}
 		}
-
-/*	glBegin(GL_POINTS);
-
-		for(int pIdx = 0 ; pIdx < X.size() ; ++pIdx)
-		{
-			glColor3f((1- Z[pIdx] / maxZ), 0.0f, Z[pIdx] / maxZ);
-			glVertex3f( X[pIdx], Y[pIdx], Z[pIdx]);
-		}	
-	glEnd();*/											
-
-	
-	rtri+=0.2f;									
+	//rtri+=0.2f;									
 	return TRUE;										
 }
 
-GLvoid KillGLWindow(GLvoid)								
+GLvoid KillGLWindow(GLvoid)
 {
 	if (fullscreen)										
 	{
