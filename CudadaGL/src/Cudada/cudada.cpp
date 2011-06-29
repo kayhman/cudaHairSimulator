@@ -52,16 +52,19 @@ int DrawGLScene(GLvoid)
 {		
 	const float hxy = 0.03;
 	const float hz = 0.45;
-	const float dt = 0.01;
+	const float dt = 1e-2;
+	const int hairLenght = 30;
+	const int gridX = 256;
+	const int gridY = 256;
 
-	static HairSimulation simu(0., 0., 0., 3.0, 100, hxy, hz);
+	static HairSimulation simu(0., 0., 0., 3.0, gridX, gridY, hairLenght, hxy, hz);
 	static bool init = false;
 	if(!init)
 		simu.initHair();
 	init = true;
 
 	simu.integrate(dt);
-	float maxZ = 30 * hz;
+	float maxZ = hairLenght * hz;
 
 	std::vector<float> X = simu.getMassPositionX();
 	std::vector<float> Y = simu.getMassPositionY();
@@ -78,10 +81,10 @@ int DrawGLScene(GLvoid)
 				if(j % 16 == 0)
 				{
 					glBegin(GL_LINE_STRIP);
-					for(int z = 0 ; z < 30 ; ++z)
+					for(int z = 0 ; z < hairLenght ; ++z)
 					{
 						int idx = z * 256 * 256 + j * 256 + i;
-						glColor3f((1- Z[idx] / maxZ), 0.0f, Z[idx] / maxZ);
+						glColor3f(0.9, 0.9, 0.7);
 						glVertex3f( X[idx], Y[idx], Z[idx]);
 					}
 					glEnd();

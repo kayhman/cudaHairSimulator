@@ -20,9 +20,9 @@ __global__ void applyGravity(float* X, float* Y, float*Z,
 							 float dt)
 {
 	const float gravity = 9.81;
-	const float mass = 1e-5;
-	const float massInv = 1e5;
-	const float alpha = 0.5 * mass; // Rayleigh damping
+	const float mass = 1e-2;
+	const float massInv = 1e2;
+	const float alpha = 1.5 * mass; // Rayleigh damping
 
 
 	int line = blockIdx.x;
@@ -107,8 +107,7 @@ __device__ void computeBendingConstraintImpulse(const float relX, const float re
 	changeZ = constI * dz / mass * (gap < 0.) *  (dist != 0.);
 }
 
-__device__ void applyConstraint(float* massPositionX, float* massPositionY, float* massPositionZ,
-								float* massVelocityX, float* massVelocityY, float* massVelocityZ,
+__global__ void applyConstraint(
 								float* X, 
 								float* Y, float*Z,
 							 float* vx, float* vy, float* vz,
@@ -117,8 +116,16 @@ __device__ void applyConstraint(float* massPositionX, float* massPositionY, floa
 							 float hz,
 							 float dt)
 {
-	const float mass = 1e-5;
-	const float massInv = 1e5;
+	const float mass = 1e-2;
+	const float massInv = 1e2;
+
+	__shared__ float  massPositionX[256*2];
+	__shared__ float  massPositionY[256*2];
+	__shared__ float  massPositionZ[256*2];
+
+	__shared__ float  massVelocityX[256*2];
+	__shared__ float  massVelocityY[256*2];
+	__shared__ float  massVelocityZ[256*2];
 
 
 
@@ -258,8 +265,8 @@ __device__ void applyBendingConstraint(float* massPositionX, float* massPosition
 									   float hz,
 									   float dt)
 {
-	const float mass = 1e-5;
-	const float massInv = 1e5;
+	const float mass = 1e-2;
+	const float massInv = 1e2;
 	const float theta = 0.0 * 3.1416 / 180.0;
 	const float minL = 2*hz;//sqrt((hz + hz * cos(theta)) * (hz + hz * cos(theta)) + (hz*sin(theta)) * (hz*sin(theta)) );
 
@@ -327,50 +334,221 @@ __global__ void applyBothConstraint(float* X, float* Y, float*Z,
 							 float dt)
 {
 
-	__shared__ float  massPositionX[256*2];
-	__shared__ float  massPositionY[256*2];
-	__shared__ float  massPositionZ[256*2];
+	const float mass = 1e-2;
+	const float massInv = 1e2;
 
-	__shared__ float  massVelocityX[256*2];
-	__shared__ float  massVelocityY[256*2];
-	__shared__ float  massVelocityZ[256*2];
+	int line = blockIdx.x;
+	int lineOffset = line * blockDim.x * blockDim.y;
 
-
-	for(int nbIter = 0 ; nbIter < 5 ; ++nbIter)
+	
 	{
-		applyConstraint(massPositionX, massPositionY, massPositionZ,
-			massVelocityX, massVelocityY, massVelocityZ,
-			X, Y, Z,
-			vx, vy, vz,
-			hairLenght,
-			hxy,
-			hz,
-			dt);
+		float massPositionXc = 0.;
+		float massPositionYc = 0.;
+		float massPositionZc = 0.;
 
-		applyBendingConstraint(massPositionX, massPositionY, massPositionZ,
-			massVelocityX, massVelocityY, massVelocityZ,
-			X, Y, Z,
-			vx, vy, vz,
-			hairLenght,
-			hxy,
-			hz,
-			dt);
+		float  massVelocityXc = 0.;
+		float  massVelocityYc = 0.;
+		float  massVelocityZc = 0.;
+
+		float massPositionXn = 0.;
+		float massPositionYn = 0.;
+		float massPositionZn = 0.;
+
+		float  massVelocityXn = 0.;
+		float  massVelocityYn = 0.;
+		float  massVelocityZn = 0.;
+
+
+		float massPositionXn1 = 0.;
+		float massPositionYn1 = 0.;
+		float massPositionZn1 = 0.;
+
+		float  massVelocityXn1 = 0.;
+		float  massVelocityYn1 = 0.;
+		float  massVelocityZn1 = 0.;
+
+		{
+			int idxC = 0 + lineOffset + threadIdx.x ;
+			massPositionXc = X[idxC];
+			massPositionYc = Y[idxC];
+			massPositionZc = Z[idxC];
+
+			massVelocityXc = vx[idxC];
+			massVelocityYc = vy[idxC];
+			massVelocityZc = vz[idxC];
+
+			// handle hair root
+			float relX = threadIdx.x * hxy - massPositionXc;
+			float relY = line * hxy - massPositionYc;
+			float relZ = - massPositionZc;
+
+			float relvX = - massVelocityXc;
+			float relvY = - massVelocityYc;
+			float relvZ = - massVelocityZc;
+
+
+			float changeX, changeY, changeZ;
+			computeConstraintImpulse(relX, relY, relZ,
+				relvX, relvY, relvZ,
+				dt, mass, massInv,
+				0.,
+				changeX, changeY,changeZ);
+
+			vx[idxC] += changeX; 
+			vy[idxC] += changeY;
+			vz[idxC] += changeZ;
+
+			massVelocityXc += changeX;
+			massVelocityYc += changeY;
+			massVelocityZc += changeZ;
+
+		}
+
+		{
+			int idxC = gridDim.x * blockDim.x * blockDim.y + lineOffset + threadIdx.x ;
+			massPositionXc = X[idxC];
+			massPositionYc = Y[idxC];
+			massPositionZc = Z[idxC];
+
+			massVelocityXc = vx[idxC];
+			massVelocityYc = vy[idxC];
+			massVelocityZc = vz[idxC];
+
+			// handle hair root
+			float relX = threadIdx.x * hxy - massPositionXc;
+			float relY = line * hxy - massPositionYc;
+			float relZ = hz - massPositionZc;
+
+			float relvX = - massVelocityXc;
+			float relvY = - massVelocityYc;
+			float relvZ = - massVelocityZc;
+
+
+			float changeX, changeY, changeZ;
+			computeConstraintImpulse(relX, relY, relZ,
+				relvX, relvY, relvZ,
+				dt, mass, massInv,
+				0.,
+				changeX, changeY,changeZ);
+
+			vx[idxC] += changeX; 
+			vy[idxC] += changeY;
+			vz[idxC] += changeZ;
+
+			massVelocityXc += changeX;
+			massVelocityYc += changeY;
+			massVelocityZc += changeZ;
+
+		}
+
+		for(int z = 0 ; z < hairLenght-2 ; ++z)
+		{
+			int ZoffC = z * (gridDim.x) * blockDim.x * blockDim.y;
+			int ZoffN = (z+1) * (gridDim.x) * blockDim.x * blockDim.y;
+			int ZoffN1 = (z+2) * (gridDim.x) * blockDim.x * blockDim.y;
+
+			int idxC = ZoffC + lineOffset + threadIdx.x ;
+			int idxN = ZoffN + lineOffset + threadIdx.x ;
+			int idxN1 = ZoffN1 + lineOffset + threadIdx.x ;
+
+			//Current particule
+			massPositionXc = X[idxC];
+			massPositionYc = Y[idxC];
+			massPositionZc = Z[idxC];
+
+			massVelocityXc = vx[idxC];
+			massVelocityYc = vy[idxC];
+			massVelocityZc = vz[idxC];
+
+			//Next particule
+			massPositionXn = X[idxN];
+			massPositionYn = Y[idxN];
+			massPositionZn = Z[idxN];
+
+			massVelocityXn = vx[idxN];
+			massVelocityYn = vy[idxN];
+			massVelocityZn = vz[idxN];
+
+			//Following Next particule
+			massPositionXn1 = X[idxN1];
+			massPositionYn1 = Y[idxN1];
+			massPositionZn1 = Z[idxN1];
+
+			massVelocityXn1 = vx[idxN1];
+			massVelocityYn1 = vy[idxN1];
+			massVelocityZn1 = vz[idxN1];
+
+
+			////////////////////////////////////////////
+			//           Apply stretch constraint     //
+			////////////////////////////////////////////
+			float relX = massPositionXn - massPositionXc;
+			float relY = massPositionYn - massPositionYc;
+			float relZ = massPositionZn - massPositionZc;
+
+
+			float relvX = massVelocityXn - massVelocityXc;
+			float relvY = massVelocityYn - massVelocityYc;
+			float relvZ = massVelocityZn - massVelocityZc;
+
+			float changeX, changeY, changeZ;
+			computeConstraintImpulse(relX, relY, relZ,
+				relvX, relvY, relvZ,
+				dt, mass, massInv + massInv * (z != 1),
+				hz,
+				changeX, changeY,changeZ);
+
+			vx[idxC] += changeX * (z != 1); 
+			vy[idxC] += changeY * (z != 1);
+			vz[idxC] += changeZ * (z != 1);
+
+			vx[idxN] += -changeX; 
+			vy[idxN] += -changeY;
+			vz[idxN] += -changeZ;
+
+			////////////////////////////////////////////
+			//           Apply bending constraint     //
+			////////////////////////////////////////////
+			relX = massPositionXn1 - massPositionXc;
+			relY = massPositionYn1 - massPositionYc;
+			relZ = massPositionZn1 - massPositionZc;
+
+
+			relvX = massVelocityXn1 - massVelocityXc;
+			relvY = massVelocityYn1 - massVelocityYc;
+			relvZ = massVelocityZn1 - massVelocityZc;
+
+			computeConstraintImpulse(relX, relY, relZ,
+				relvX, relvY, relvZ,
+				dt, mass, massInv + massInv * (z != 1),
+				2*hz,
+				changeX, changeY,changeZ);
+
+			vx[idxC] += changeX * (z != 1); 
+			vy[idxC] += changeY * (z != 1);
+			vz[idxC] += changeZ * (z != 1);
+
+			vx[idxN1] += -changeX; 
+			vy[idxN1] += -changeY;
+			vz[idxN1] += -changeZ;
+		}
 	}
 }
 
-HairSimulation::HairSimulation(float x, float y, float z, float radius, int hairLenght, float hxy, float hz) :
+
+HairSimulation::HairSimulation(float x, float y, float z, float radius, int gridX, int gridY, int hairLenght, float hxy, float hz) :
 x(x),
 y(y), 
 z(z),
 radius(radius),
 hairLenght(hairLenght),
-blockX(256),
-blockY(1),
 d_x(NULL),
 d_y(NULL),
 d_z(NULL),
 hxy(hxy),
-hz(hz)
+hz(hz),
+gridX(gridX),
+gridY(gridY)
 {
 	
 }
@@ -387,8 +565,8 @@ HairSimulation::~HairSimulation()
 
 void HairSimulation::initHair()
 {
-	dim3 gridSize(256, hairLenght); 
-	dim3 blockSize(blockX, blockY);
+	dim3 gridSize(gridY, hairLenght); 
+	dim3 blockSize(gridX, 1);
 
 	int size = gridSize.x * gridSize.y * blockSize.x * blockSize.y;
 
@@ -449,8 +627,8 @@ void HairSimulation::initHair()
 
 void HairSimulation::integrate(float dt)
 {
-	dim3 gridSize(256, hairLenght);
-	dim3 blockSize(blockX, blockY);
+	dim3 gridSize(gridY, hairLenght);
+	dim3 blockSize(gridX, 1);
 	int size = gridSize.x * gridSize.y * blockSize.x * blockSize.y;
 
 	/////////////////////////////////////////
@@ -481,7 +659,7 @@ void HairSimulation::integrate(float dt)
 		/////////////////////////////////////////
 		//   Integrate Constrained Motion      //
 		/////////////////////////////////////////
-		dim3 gridSize2(256, 1);
+		dim3 gridSize2(gridX, 1);
 		cudaEventCreate(&start);
 		cudaEventCreate(&stop);
 		cudaEventRecord( start, 0 );

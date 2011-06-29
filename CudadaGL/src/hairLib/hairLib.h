@@ -14,7 +14,6 @@ private:
 	float radius;
 	int hairLenght;
 	int gridX, gridY, gridZ;
-	const int blockX, blockY;
 
 	std::vector<float> X;
 	std::vector<float> Y;
@@ -24,7 +23,7 @@ private:
 
 
 public:
-	HairSimulation(float x, float y, float z, float radius, int hairLenght, float hxy, float hz);
+	HairSimulation(float x, float y, float z, float radius, int gridX, int gridY, int hairLenght, float hxy, float hz);
 	~HairSimulation();
 	void initHair();
 	void integrate(float dt);
