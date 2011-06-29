@@ -54,8 +54,8 @@ int DrawGLScene(GLvoid)
 	const float hz = 0.45;
 	const float dt = 1e-2;
 	const int hairLenght = 30;
-	const int gridX = 256;
-	const int gridY = 256;
+	const int gridX = 128;
+	const int gridY = 128;
 
 	static HairSimulation simu(0., 0., 0., 3.0, gridX, gridY, hairLenght, hxy, hz);
 	static bool init = false;
@@ -74,8 +74,8 @@ int DrawGLScene(GLvoid)
 	glLoadIdentity();									
 	glTranslatef(-1.5f,-1.0f,-32.0f);						
 	glRotatef(45 + rtri,0.0f,1.0f,0.0f);
-	for(int i = 0 ; i < 256 ; ++i)
-		for(int j = 0 ; j < 256 ; ++j)
+	for(int i = 0 ; i < gridX ; ++i)
+		for(int j = 0 ; j < gridY ; ++j)
 		{
 			if(i%16 == 0)		
 				if(j % 16 == 0)
@@ -83,7 +83,7 @@ int DrawGLScene(GLvoid)
 					glBegin(GL_LINE_STRIP);
 					for(int z = 0 ; z < hairLenght ; ++z)
 					{
-						int idx = z * 256 * 256 + j * 256 + i;
+						int idx = z * gridX * gridY + j * gridX + i;
 						glColor3f(0.9, 0.9, 0.7);
 						glVertex3f( X[idx], Y[idx], Z[idx]);
 					}
