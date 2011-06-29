@@ -6,6 +6,9 @@ class HairSimulation
 private:
 	float *d_x, *d_y, *d_z;
 	float *d_vx, *d_vy, *d_vz;
+	float *d_gap, *d_velProj;
+	float *d_dirX, *d_dirY, *d_dirZ;
+
 	float x, y, z;
 	float hxy, hz;
 	float radius;

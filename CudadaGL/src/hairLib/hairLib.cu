@@ -83,54 +83,97 @@ __global__ void applyConstraint(float* X, float* Y, float*Z,
 
 	int line = blockIdx.x;
 	int lineOffset = line * blockDim.x * blockDim.y;
-	int idxC = 0 + lineOffset + threadIdx.x ;
-
-	massPositionX[threadIdx.x] = X[idxC];
-	massPositionY[threadIdx.x] = Y[idxC];
-	massPositionZ[threadIdx.x] = Z[idxC];
-
-	massVelocityX[threadIdx.x] = vx[idxC];
-	massVelocityY[threadIdx.x] = vy[idxC];
-	massVelocityZ[threadIdx.x] = vz[idxC];
-
-	// handle hair root
-	float relX = threadIdx.x * hxy - massPositionX[threadIdx.x];
-	float relY = line * hxy - massPositionY[threadIdx.x];
-	float relZ = - massPositionZ[threadIdx.x];
-
-	float relvX = - massVelocityX[threadIdx.x];
-	float relvY = - massVelocityY[threadIdx.x];
-	float relvZ = - massVelocityZ[threadIdx.x];
-
 	
-	float dist = sqrt( relX * relX + relY * relY + relZ * relZ);
-	if(dist != 0.)
 	{
-		float dx = relX / dist;
-		float dy = relY / dist;
-		float dz = relZ / dist;
+		int idxC = 0 + lineOffset + threadIdx.x ;
+		massPositionX[threadIdx.x] = X[idxC];
+		massPositionY[threadIdx.x] = Y[idxC];
+		massPositionZ[threadIdx.x] = Z[idxC];
 
-		float velProj = dx * relvX + dy * relvY + dz * relvZ;
-		float gap = dist;
+		massVelocityX[threadIdx.x] = vx[idxC];
+		massVelocityY[threadIdx.x] = vy[idxC];
+		massVelocityZ[threadIdx.x] = vz[idxC];
 
-		float constI = (gap / dt + velProj) / massInv ;
+		// handle hair root
+		float relX = threadIdx.x * hxy - massPositionX[threadIdx.x];
+		float relY = line * hxy - massPositionY[threadIdx.x];
+		float relZ = - massPositionZ[threadIdx.x];
 
-		vx[idxC] += constI * dx / mass; 
-		vy[idxC] += constI * dy / mass;
-		vz[idxC] += constI * dz / mass;
+		float relvX = - massVelocityX[threadIdx.x];
+		float relvY = - massVelocityY[threadIdx.x];
+		float relvZ = - massVelocityZ[threadIdx.x];
 
-		massVelocityX[threadIdx.x] += constI * dx / mass;
-		massVelocityY[threadIdx.x] += constI * dy / mass;
-		massVelocityZ[threadIdx.x] += constI * dz / mass;
+		float dist = sqrt( relX * relX + relY * relY + relZ * relZ);
+		if(dist != 0.)
+		{
+			float dx = relX / dist;
+			float dy = relY / dist;
+			float dz = relZ / dist;
 
+			float velProj = dx * relvX + dy * relvY + dz * relvZ;
+			float gap = dist;
+
+			float constI = (gap / dt + velProj) / massInv ;
+
+			vx[idxC] += constI * dx / mass; 
+			vy[idxC] += constI * dy / mass;
+			vz[idxC] += constI * dz / mass;
+
+			massVelocityX[threadIdx.x] += constI * dx / mass;
+			massVelocityY[threadIdx.x] += constI * dy / mass;
+			massVelocityZ[threadIdx.x] += constI * dz / mass;
+		}
 	}
 
-	for(int z = 0 ; z < hairLenght-1 ; ++z)
+	{
+		int idxC = (gridDim.x) * blockDim.x * blockDim.y + lineOffset + threadIdx.x ;
+		massPositionX[threadIdx.x] = X[idxC];
+		massPositionY[threadIdx.x] = Y[idxC];
+		massPositionZ[threadIdx.x] = Z[idxC];
+
+		massVelocityX[threadIdx.x] = vx[idxC];
+		massVelocityY[threadIdx.x] = vy[idxC];
+		massVelocityZ[threadIdx.x] = vz[idxC];
+
+		// handle hair root
+		float relX = threadIdx.x * hxy - massPositionX[threadIdx.x];
+		float relY = line * hxy - massPositionY[threadIdx.x];
+		float relZ = hz - massPositionZ[threadIdx.x];
+
+		float relvX = - massVelocityX[threadIdx.x];
+		float relvY = - massVelocityY[threadIdx.x];
+		float relvZ = - massVelocityZ[threadIdx.x];
+
+
+		float dist = sqrt( relX * relX + relY * relY + relZ * relZ);
+		if(dist != 0.)
+		{
+			float dx = relX / dist;
+			float dy = relY / dist;
+			float dz = relZ / dist;
+
+			float velProj = dx * relvX + dy * relvY + dz * relvZ;
+			float gap = dist;
+
+			float constI = (gap / dt + velProj) / massInv ;
+
+			vx[idxC] += constI * dx / mass; 
+			vy[idxC] += constI * dy / mass;
+			vz[idxC] += constI * dz / mass;
+
+			massVelocityX[threadIdx.x] += constI * dx / mass;
+			massVelocityY[threadIdx.x] += constI * dy / mass;
+			massVelocityZ[threadIdx.x] += constI * dz / mass;
+
+		}
+	}
+
+	for(int z = 1 ; z < hairLenght-1 ; ++z)
 	{
 		int ZoffC = z * (gridDim.x) * blockDim.x * blockDim.y;
 		int ZoffN = (z+1) * (gridDim.x) * blockDim.x * blockDim.y;
 
-		idxC = ZoffC + lineOffset + threadIdx.x ;
+		int idxC = ZoffC + lineOffset + threadIdx.x ;
 		int idxN = ZoffN + lineOffset + threadIdx.x ;
 
 		massPositionX[256 + threadIdx.x] = X[idxN];
@@ -141,7 +184,6 @@ __global__ void applyConstraint(float* X, float* Y, float*Z,
 		massVelocityY[256 + threadIdx.x] = vy[idxN];
 		massVelocityZ[256 + threadIdx.x] = vz[idxN];
 
-
 		float relX = massPositionX[256 + threadIdx.x] - massPositionX[threadIdx.x];
 		float relY = massPositionY[256 + threadIdx.x] - massPositionY[threadIdx.x];
 		float relZ = massPositionZ[256 + threadIdx.x] - massPositionZ[threadIdx.x];
@@ -150,7 +192,6 @@ __global__ void applyConstraint(float* X, float* Y, float*Z,
 		float relvX = massVelocityX[256 + threadIdx.x] - massVelocityX[threadIdx.x];
 		float relvY = massVelocityY[256 + threadIdx.x] - massVelocityY[threadIdx.x];
 		float relvZ = massVelocityZ[256 + threadIdx.x] - massVelocityZ[threadIdx.x];
-
 
 		float dist = sqrt( relX * relX + relY * relY + relZ * relZ);
 		if(dist != 0.)
@@ -180,9 +221,6 @@ __global__ void applyConstraint(float* X, float* Y, float*Z,
 		massPositionX[threadIdx.x] = massPositionX[256 + threadIdx.x];
 		massPositionY[threadIdx.x] = massPositionY[256 + threadIdx.x];
 		massPositionZ[threadIdx.x] = massPositionZ[256 + threadIdx.x];
-
-		
-
 	}
 }
 
@@ -227,6 +265,13 @@ void HairSimulation::initHair()
 	cudaMalloc(&d_x, size * sizeof(float));
 	cudaMalloc(&d_y, size * sizeof(float));
 	cudaMalloc(&d_z, size * sizeof(float));
+
+	cudaMalloc(&d_gap, size * sizeof(float));
+	cudaMalloc(&d_velProj, size * sizeof(float));
+
+	cudaMalloc(&d_dirX, size * sizeof(float));
+	cudaMalloc(&d_dirY, size * sizeof(float));
+	cudaMalloc(&d_dirZ, size * sizeof(float));
 
 
 	cudaEvent_t start, stop;

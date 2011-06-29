@@ -54,7 +54,7 @@ int DrawGLScene(GLvoid)
 	const float hz = 0.45;
 	const float dt = 0.01;
 
-	static HairSimulation simu(0., 0., 0., 3.0,60, hxy, hz);
+	static HairSimulation simu(0., 0., 0., 3.0, 100, hxy, hz);
 	static bool init = false;
 	if(!init)
 		simu.initHair();
