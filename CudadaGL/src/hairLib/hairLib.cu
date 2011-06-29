@@ -61,7 +61,7 @@ __global__ void applyGravity(float* X, float* Y, float*Z,
 
 	float Imass = -gravity * dt / massInv;
 
-	float iWind = -100.0 * dt / massInv;
+	float iWind = -50.0 * dt / massInv;
 
 	float Idampx = - alpha * vx[idx] * dt;
 	float Idampy = - alpha * vy[idx] * dt;
@@ -477,7 +477,7 @@ void HairSimulation::integrate(float dt)
 
 	float windX = (float)rand() / (float)RAND_MAX ;
 	float windY = (float)rand() / (float)RAND_MAX ;
-	float windZ = (float)rand() / (float)RAND_MAX ;
+	float windZ = fabs((float)rand() / (float)RAND_MAX ) ;
 
 	float norm = sqrt(windX*windX + windY*windY + windZ*windZ);
 

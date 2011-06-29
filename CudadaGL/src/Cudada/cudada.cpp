@@ -3,6 +3,7 @@
 #include <gl\gl.h>			
 #include <gl\glu.h>			
 	
+#include "objLoader.h"
 
 HDC			hDC=NULL;		
 HGLRC		hRC=NULL;		
@@ -39,29 +40,45 @@ GLvoid ReSizeGLScene(GLsizei width, GLsizei height)
 
 int InitGL(GLvoid)										
 {
-	glShadeModel(GL_SMOOTH);							
-	glClearColor(0.0f, 0.0f, 0.0f, 0.5f);				
-	glClearDepth(1.0f);									
-	glEnable(GL_DEPTH_TEST);							
-	glDepthFunc(GL_LEQUAL);								
-	glHint(GL_PERSPECTIVE_CORRECTION_HINT, GL_NICEST);	
+   
+   //GLfloat mat_shininess[] = { 500.0 };
+   GLfloat light_position[] = { 1.0, 1.0, 1.0, 0.0 };
+   glClearColor (0.0, 0.0, 0.0, 0.0);
+   glShadeModel (GL_SMOOTH);
+
+
+   //glMaterialfv(GL_FRONT, GL_SHININESS, mat_shininess);
+   glLightfv(GL_LIGHT0, GL_POSITION, light_position);
+
+   glEnable(GL_LIGHTING);
+   glEnable(GL_LIGHT0);
+   glEnable(GL_DEPTH_TEST);
+
+   glEnable(GL_NORMALIZE);
+
 	return TRUE;										
 }
 
 int DrawGLScene(GLvoid)									
 {		
-	const float hxy = 0.03;
-	const float hz = 0.45;
+	const float hxy = 0.005;
+	const float hz = 0.15;
 	const float dt = 1e-2;
 	const int hairLenght = 30;
 	const int gridX = 128;
 	const int gridY = 128;
+
+	static ObjLoader loader("cudada.obj");
+
 
 	static HairSimulation simu(0., 0., 0., 3.0, gridX, gridY, hairLenght, hxy, hz);
 	static bool init = false;
 	if(!init)
 		simu.initHair();
 	init = true;
+
+
+
 
 	simu.integrate(dt);
 	float maxZ = hairLenght * hz;
@@ -71,9 +88,19 @@ int DrawGLScene(GLvoid)
 	std::vector<float> Z = simu.getMassPositionZ();
 
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);	
-	glLoadIdentity();									
-	glTranslatef(-1.5f,-1.0f,-32.0f);						
-	glRotatef(45 + rtri,0.0f,1.0f,0.0f);
+	glLoadIdentity();
+
+	glTranslatef(7.0f,1.5f,-32.0f);					
+	//glRotatef(90 + 45,0.0f,1.0f,0.0f);
+	
+	{
+		GLfloat mat_ambient[] = { 1.0, 1.0, 0.0, 1.0 };
+		GLfloat mat_specular[] = { 0.2, 0.15, 0.15, 1.0 };
+
+		glMaterialfv(GL_FRONT, GL_SPECULAR, mat_specular);
+		glMaterialfv(GL_FRONT, GL_AMBIENT, mat_ambient);
+	}
+
 	for(int i = 0 ; i < gridX ; ++i)
 		for(int j = 0 ; j < gridY ; ++j)
 		{
@@ -86,10 +113,77 @@ int DrawGLScene(GLvoid)
 						int idx = z * gridX * gridY + j * gridX + i;
 						glColor3f(0.9, 0.9, 0.7);
 						glVertex3f( X[idx], Y[idx], Z[idx]);
+						glNormal3f( 0., 0., 1.0);
 					}
 					glEnd();
 				}
 		}
+
+
+	std::vector<float>& vertices = loader.getVertices();
+	std::vector<float>& normals = loader. getVerticesNormal();
+	std::vector<float>& triangleNormals = loader. getTrianglesNormal();
+	std::vector<int>& triangles = loader. getTriangles();
+
+	glLoadIdentity();
+
+	glTranslatef(-1.5f,-1.0f,-32.0f);	
+	//glRotatef(180,0.0f,1.0f,0.0f);
+	//glRotatef(-90,1.0f,0.0f,0.0f);
+	//glRotatef(45,0.0f,0.0f,1.0f);
+
+	{
+		GLfloat mat_ambient[] = { 1.0, 0.0, 0.0, 1.0 };
+		GLfloat mat_specular[] = { 0.2, 0.15, 0.15, 1.0 };
+		GLfloat mat_emissive[] = { 1.0, 0.0, 0.0, 1.0 };
+
+		glMaterialfv(GL_FRONT, GL_SPECULAR, mat_specular);
+		glMaterialfv(GL_FRONT, GL_AMBIENT, mat_ambient);
+		glMaterialfv(GL_FRONT, GL_EMISSION, mat_emissive);
+	}
+	glBegin(GL_TRIANGLES);
+	for(int i = 0 ; i < triangles.size()/3 ; i++)
+	{
+		float Ax = vertices[3*triangles[3*i] + 0];
+		float Ay = vertices[3*triangles[3*i] + 1];
+		float Az = vertices[3*triangles[3*i] + 2];
+
+		float Bx = vertices[3*triangles[3*i+1] + 0];
+		float By = vertices[3*triangles[3*i+1] + 1];
+		float Bz = vertices[3*triangles[3*i+1] + 2];
+
+
+		float Cx = vertices[3*triangles[3*i+2] + 0];
+		float Cy = vertices[3*triangles[3*i+2] + 1];
+		float Cz = vertices[3*triangles[3*i+2] + 2];
+
+		float Anx = normals[3*triangles[3*i] + 0];
+		float Any = normals[3*triangles[3*i] + 1];
+		float Anz = normals[3*triangles[3*i] + 2];
+
+		float Bnx = normals[3*triangles[3*i+1] + 0];
+		float Bny = normals[3*triangles[3*i+1] + 1];
+		float Bnz = normals[3*triangles[3*i+1] + 2];
+
+		float Cnx = normals[3*triangles[3*i+2] + 0];
+		float Cny = normals[3*triangles[3*i+2] + 1];
+		float Cnz = normals[3*triangles[3*i+2] + 2];
+
+		glNormal3f( Anx, Any, Anz);
+		glVertex3f( Ax, Ay, Az);
+		glColor3f(1.0, 0.0, 0.0);
+
+		glNormal3f( Bnx, Bny, Bnz);
+		glVertex3f( Bx, By, Bz);
+		glColor3f(1.0, 0.0, 0.0);
+
+		glNormal3f( Cnx, Cny, Cnz);
+		glVertex3f( Cx, Cy, Cz);
+		glColor3f(1.0, 0.0, 0.0);
+
+
+	}
+	glEnd();
 	//rtri+=0.2f;									
 	return TRUE;										
 }
