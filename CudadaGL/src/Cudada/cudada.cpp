@@ -54,14 +54,14 @@ int InitGL(GLvoid)
    glEnable(GL_LIGHT0);
    glEnable(GL_DEPTH_TEST);
 
-   glEnable(GL_NORMALIZE);
+   //glEnable(GL_NORMALIZE);
 
 	return TRUE;										
 }
 
 int DrawGLScene(GLvoid)									
 {		
-	const float hxy = 0.005;
+	const float hxy = 0.01;
 	const float hz = 0.15;
 	const float dt = 1e-2;
 	const int hairLenght = 30;
@@ -90,16 +90,17 @@ int DrawGLScene(GLvoid)
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);	
 	glLoadIdentity();
 
-	glTranslatef(7.0f,1.5f,-32.0f);					
-	//glRotatef(90 + 45,0.0f,1.0f,0.0f);
+	glTranslatef(0.f,0.f,-32.0f);			
+	glRotatef(rtri,0.0f,1.0f,0.0f);
+	//glRotatef(45,0.0f,1.0f,0.0f);
 	
-	{
-		GLfloat mat_ambient[] = { 1.0, 1.0, 0.0, 1.0 };
-		GLfloat mat_specular[] = { 0.2, 0.15, 0.15, 1.0 };
+	//{
+	//	GLfloat mat_ambient[] = { 1.0, 1.0, 0.0, 1.0 };
+	//	GLfloat mat_specular[] = { 0.2, 0.15, 0.15, 1.0 };
 
-		glMaterialfv(GL_FRONT, GL_SPECULAR, mat_specular);
-		glMaterialfv(GL_FRONT, GL_AMBIENT, mat_ambient);
-	}
+	//	glMaterialfv(GL_FRONT, GL_SPECULAR, mat_specular);
+	//	glMaterialfv(GL_FRONT, GL_AMBIENT, mat_ambient);
+	//}
 
 	for(int i = 0 ; i < gridX ; ++i)
 		for(int j = 0 ; j < gridY ; ++j)
@@ -113,7 +114,7 @@ int DrawGLScene(GLvoid)
 						int idx = z * gridX * gridY + j * gridX + i;
 						glColor3f(0.9, 0.9, 0.7);
 						glVertex3f( X[idx], Y[idx], Z[idx]);
-						glNormal3f( 0., 0., 1.0);
+						//glNormal3f( 0., 0., 1.0);
 					}
 					glEnd();
 				}
@@ -125,9 +126,11 @@ int DrawGLScene(GLvoid)
 	std::vector<float>& triangleNormals = loader. getTrianglesNormal();
 	std::vector<int>& triangles = loader. getTriangles();
 
-	glLoadIdentity();
-
-	glTranslatef(-1.5f,-1.0f,-32.0f);	
+	
+	glRotatef(90,1.0f,0.0f,0.0f);
+	//glTranslatef(0.f,0.f,-32.0f);	
+	//glRotatef(90,0.0f,1.0f,0.0f);
+	//glRotatef(90,1.0f,0.0f,0.0f);
 	//glRotatef(180,0.0f,1.0f,0.0f);
 	//glRotatef(-90,1.0f,0.0f,0.0f);
 	//glRotatef(45,0.0f,0.0f,1.0f);
@@ -184,7 +187,7 @@ int DrawGLScene(GLvoid)
 
 	}
 	glEnd();
-	//rtri+=0.2f;									
+	rtri+=0.2f;									
 	return TRUE;										
 }
 
