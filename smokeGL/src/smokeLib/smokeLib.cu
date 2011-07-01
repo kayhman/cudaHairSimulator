@@ -11,105 +11,48 @@ __global__ void initSmokeK(float* density)
 	int column = blockIdx.x;
 	int row = threadIdx.x;
 
-	int idx = slice * gridDim.x * gridDim.y + column * blockDim.x + row;
+	int idx = slice * gridDim.x * gridDim.y + row * blockDim.x + column;
 	density[idx] = column * 1.0 / blockDim.x;
 }
 
-__global__ void propagateLight(float* density, float* radiance)
+__global__ void propagateLight(float* density, float* radiance,  float* image)
 {
-	const float albedo = 1.0;
-	const float light = 1.0;
-	const float h = 0.1;
+	float albedo = 1.0;
+	float light = 1.0;
+	float h = 0.1;
 
-	__shared__ float colDens[8 * 256]; // load eight cols
 	int slice = blockIdx.x;
+	int col = threadIdx.x;
+
 
 	float tRay = 1.;
-	for(int depth = 0 ; depth < 32; ++depth)
+	for(int row = 0 ; row < 256 ; ++row)
 	{
-		for(int passId = 0 ; passId < 8 ; ++passId)
-		{
-			int row = threadIdx.x % 8;
-			int col = passId * 32 + threadIdx.x / 8;
+		int gidx = slice * gridDim.x * gridDim.y + row * blockDim.x + col;
 
-			int gidx = slice * gridDim.x * gridDim.y + col * blockDim.x +  depth * 8 + row;
-			int sidx = row * 256 + (passId * 32 + threadIdx.x / 8);
-			colDens[sidx] = density[gidx];
-		}
+		float tVox = exp(-0.3 * h * density[gidx]);
+		tRay *= tVox;
 
-		//__syncthreads();
-
-		for(int row = 0 ; row < 8 ; ++row)
-		{
-			int col = threadIdx.x;
-			const float tVox = exp(-0.3 * h * colDens[row * blockDim.x + col]);
-
-			tRay *= tVox;
-			colDens[row * blockDim.x + col] = albedo * light * tRay ;
-			
-		}
-
-		//__syncthreads();
-
-		for(int passId = 0 ; passId < 8 ; ++passId)
-		{
-			int row = threadIdx.x % 8;
-			int col = passId * 32 + threadIdx.x / 8;
-
-			int gidx = slice * gridDim.x * gridDim.y + col * blockDim.x + depth * 8 + row;
-			int sidx = row * 256 + (passId * 32 + threadIdx.x / 8);
-			radiance[gidx] = colDens[sidx];
-		}
+		int ridx = slice * gridDim.x * gridDim.y + row + col * blockDim.x;
+		radiance[gidx] = albedo * light * tRay ;
 	}
-}
 
+
+	for(int row = 0 ; rcol < 256 ; ++row)
+	{
+		int gidx = slice * gridDim.x * gridDim.y + row * blockDim.x + col;
+
+		float tVox = exp(-0.3 * h * density[gidx]);
+		tRay *= tVox;
+
+		int ridx = slice * gridDim.x * gridDim.y + row + col * blockDim.x;
+		radiance[gidx] = albedo * light * tRay ;
+	}
+
+}
 
 __global__ void renderImage(float* density, float* radiance, float* image)
 {
-	const float albedo = 1.0;
-	const float light = 1.0;
-	const float h = 0.1;
-
-	__shared__ float colDens[8 * 256]; // load eight cols
-	int slice = blockIdx.x;
-
-	float pixel = 0.;
-	float tRay = 1.;
-	for(int depth = 0 ; depth < 32; ++depth)
-	{
-		for(int passId = 0 ; passId < 8 ; ++passId)
-		{
-			int row = threadIdx.x % 8;
-			int col = passId * 32 + threadIdx.x / 8;
-
-			int gidx = slice * gridDim.x * gridDim.y + col * blockDim.x +  depth * 8 + row;
-			int sidx = row * 256 + (passId * 32 + threadIdx.x / 8);
-			colDens[sidx] = density[gidx];
-		}
-
-		__syncthreads();
-
-		for(int row = 0 ; row < 8 ; ++row)
-		{
-			int col = threadIdx.x;
-			const float tVox = exp(-0.3 * h * colDens[row * blockDim.x + col]);
-
-			tRay *= tVox;
-			colDens[row * blockDim.x + col] = albedo * light * tRay ;
-		}
-
-		__syncthreads();
-
-		for(int passId = 0 ; passId < 8 ; ++passId)
-		{
-			int row = threadIdx.x % 8;
-			int col = passId * 32 + threadIdx.x / 8;
-
-			int gidx = slice * gridDim.x * gridDim.y + col * blockDim.x + depth * 8 + row;
-			int sidx = row * 256 + (passId * 32 + threadIdx.x / 8);
-			radiance[gidx] = colDens[sidx];
-		}
-	}
 }
 
 SmokeRenderer::SmokeRenderer() :
