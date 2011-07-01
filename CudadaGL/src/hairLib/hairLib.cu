@@ -2,8 +2,16 @@
 #include <fstream>
 #define M_PI 3.141516
 
+#define rootDistribType  0
 
-__global__ void initHairs(float* X, float* Y, float*Z, float hxy, float hz)
+template<int type>
+__global__ void initHairs(float* X, float* Y, float*Z, float hxy, float hz);
+
+template<int type>
+__device__ float computeX(float hxy);
+
+template<>
+__global__ void initHairs<0>(float* X, float* Y, float*Z, float hxy, float hz)
 {
 	int line = blockIdx.x;
 	int Zi = blockIdx.y;
@@ -17,13 +25,21 @@ __global__ void initHairs(float* X, float* Y, float*Z, float hxy, float hz)
 	Z[idx] = Zi * hz ;
 }
 
-__device__ float computeX(float hxy)
+template<>
+__device__ float computeX<1>(float hxy)
 {
 	float hx = hxy * cos( - M_PI / 2.0 + ((float)blockIdx.x * M_PI )/ ((float)blockDim.x) ); 
 	return threadIdx.x * hx - (blockDim.x  * hx)/ 2.0;
 }
 
-__global__ void initHairsCircle(float* X, float* Y, float*Z, float hxy, float hz)
+template<>
+__device__ float computeX<0>(float hxy)
+{
+	return threadIdx.x * hxy;
+}
+
+template<>
+__global__ void initHairs<1>(float* X, float* Y, float*Z, float hxy, float hz)
 {
 	int line = blockIdx.x;
 	int Zi = blockIdx.y;
@@ -34,7 +50,7 @@ __global__ void initHairsCircle(float* X, float* Y, float*Z, float hxy, float hz
 	int idx = Zoffset + lineOffset + threadIdx.x ;
 
 	
-	X[idx] = computeX(hxy);
+	X[idx] = computeX<1>(hxy);
 	Y[idx] = line * hxy;
 	Z[idx] = Zi * hz ;
 }
@@ -137,7 +153,7 @@ __device__ void computeBendingConstraintImpulse(const float relX, const float re
 
 
 
-
+template<int type>
 __global__ void applyBothConstraint(float* X, float* Y, float*Z,
 							 float* vx, float* vy, float* vz,
 							 int hairLenght,
@@ -189,7 +205,7 @@ __global__ void applyBothConstraint(float* X, float* Y, float*Z,
 			massVelocityZc = vz[idxC];
 
 			// handle hair root
-			float relX = computeX(hxy) - massPositionXc;
+			float relX = computeX<type>(hxy) - massPositionXc;
 			float relY = line * hxy - massPositionYc;
 			float relZ = - massPositionZc;
 
@@ -226,7 +242,7 @@ __global__ void applyBothConstraint(float* X, float* Y, float*Z,
 			massVelocityZc = vz[idxC];
 
 			// handle hair root
-			float relX = computeX(hxy) - massPositionXc;
+			float relX = computeX<type>(hxy) - massPositionXc;
 			float relY = line * hxy - massPositionYc;
 			float relZ = hz - massPositionZc;
 
@@ -403,7 +419,7 @@ void HairSimulation::initHair()
 	cudaEventCreate(&stop);
 	cudaEventRecord( start, 0 );
 
-	initHairsCircle<<<gridSize, blockSize >>>(d_x, d_y, d_z, hxy, hz);
+	initHairs<rootDistribType> <<<gridSize, blockSize >>>(d_x, d_y, d_z, hxy, hz);
 	
 	cudaEventRecord( stop, 0 );
 	cudaEventSynchronize( stop );
@@ -512,7 +528,7 @@ void HairSimulation::integrate(float dt)
 		cudaEventCreate(&stop);
 		cudaEventRecord( start, 0 );
 
-		applyBothConstraint<<<gridSize2, blockSize >>>(d_x, d_y, d_z, 
+		applyBothConstraint<rootDistribType><<<gridSize2, blockSize >>>(d_x, d_y, d_z, 
 			d_vx, d_vy, d_vz,
 			hairLenght,
 			hxy,
